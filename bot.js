@@ -1,3 +1,5 @@
+require('dotenv').config(); // load env variables
+
 const { 
     Client, 
     GatewayIntentBits, 
@@ -12,8 +14,9 @@ const {
 } = require('discord.js');
 const mineflayer = require('mineflayer');
 
-const token = 'YOUR_DISCORD_BOT_TOKEN_HERE'; // Replace with your bot token
-const logChannelId = '1359150301806067883';
+// Environment variables: use .env file for sensitive configurations
+const token = process.env.DISCORD_TOKEN;
+const logChannelId = process.env.LOG_CHANNEL_ID;
 const rylixLogo = 'https://cdn.imrishmika.site/rylix/RYLIX-white.png';
 
 const client = new Client({ 
@@ -120,6 +123,7 @@ client.on('interactionCreate', async interaction => {
             }
             switch(interaction.customId) {
                 case 'jump': {
+                    // Enhanced jump command:
                     // Toggle jump loop: if already jumping, stop; else start repeating jumps to simulate natural jumping.
                     if(session.jumpInterval) {
                         clearInterval(session.jumpInterval);
@@ -140,7 +144,7 @@ client.on('interactionCreate', async interaction => {
                                 delete session.jumpInterval;
                             }
                         }, 5000);
-                        await interaction.reply({ embeds: [createEmbed('Jump', 'Bot is jumping repeatedly! 🚀')] , ephemeral: true });
+                        await interaction.reply({ embeds: [createEmbed('Jump', 'Bot is jumping repeatedly! 🚀')], ephemeral: true });
                     }
                     break;
                 }
@@ -189,6 +193,17 @@ client.on('interactionCreate', async interaction => {
                     const actionRow = new ActionRowBuilder().addComponents(messageInput);
                     modal.addComponents(actionRow);
                     await interaction.showModal(modal);
+                    break;
+                }
+                case 'attack': {
+                    // New feature: Attack nearest player
+                    const entity = session.bot.nearestEntity(e => e.type === 'player' && e.username !== session.bot.username);
+                    if(entity) {
+                        session.bot.attack(entity);
+                        await interaction.reply({ embeds: [createEmbed('Attack', `Attacking nearest player: **${entity.username}** ⚔️`)], ephemeral: true });
+                    } else {
+                        await interaction.reply({ embeds: [createEmbed('Attack', 'No nearby player found to attack.')], ephemeral: true });
+                    }
                     break;
                 }
                 default:
@@ -278,7 +293,7 @@ async function handleDisconnectCommand(interaction, userId) {
         session.connect = false;
         session.bot.end();
         delete session.bot;
-        await interaction.reply({ embeds: [createEmbed('Disconnected', 'Bot successfully disconnected from the server. 👋')] , ephemeral: true});
+        await interaction.reply({ embeds: [createEmbed('Disconnected', 'Bot successfully disconnected from the server. 👋')], ephemeral: true });
     } else {
         await interaction.reply({ embeds: [createEmbed('Error', 'Bot is not currently connected to any server 😕')], ephemeral: true });
     }
@@ -301,7 +316,7 @@ async function handleSetDelayCommand(interaction, userId, options) {
         userSessions[userId] = {};
     }
     userSessions[userId].delay = delay * 1000;
-    await interaction.reply({ embeds: [createEmbed('Delay Set', `Reconnect delay has been set to **${delay} seconds**. ⏰`)] , ephemeral: true});
+    await interaction.reply({ embeds: [createEmbed('Delay Set', `Reconnect delay has been set to **${delay} seconds**. ⏰`)], ephemeral: true });
 }
 
 // /help command: Provide usage instructions in a modern embedded design
@@ -309,23 +324,23 @@ async function handleHelpCommand(interaction) {
     const helpMessage = `
 **Rylix AFK Bot Help** 😄
 
-**Setup your server:**
+**Setup your server:**  
 \`/settings <host> <port> <username>\`
 
-**Connect:**
+**Connect:**  
 \`/connect\`
 
-**Disconnect:**
+**Disconnect:**  
 \`/disconnect\`
 
-**Set a command for auto-execution on connect:**
+**Set a command for auto-execution on connect:**  
 \`/setcommand <command>\`
 
-**Set reconnect delay:**
+**Set reconnect delay:**  
 \`/setdelay <delay_in_seconds>\`
 
-**Control Panel:**
-\`/panel\` - Open the interactive panel to make the bot jump, look around, change name, or send a chat message.
+**Control Panel:**  
+\`/panel\` - Open the interactive panel to make the bot jump, look around, change name, send a chat message, or attack the nearest player.
 
 _Note: The bot connects to Minecraft servers (versions 1.18 - 1.20.4) using offline mode._
     `;
@@ -348,7 +363,8 @@ async function handlePanelCommand(interaction, userId) {
     );
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('change_name').setLabel('Change Name 💫').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('send_message').setLabel('Send Message ✉️').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('send_message').setLabel('Send Message ✉️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('attack').setLabel('Attack ⚔️').setStyle(ButtonStyle.Danger)
     );
     await interaction.reply({ embeds: [embed], components: [row, row2], ephemeral: true });
 }
@@ -373,18 +389,18 @@ function createBot(session, userId) {
         } catch(err){
             console.error('Error fetching log channel:', err);
         }
-        bot.chat("Rylix AFK 🤖");
+        bot.chat("Hello, I'm Your Server AFK & Anti Cheat Bot");
         if(session.commandOnConnect){
             bot.chat(session.commandOnConnect);
         }
     });
     
-    // Listen for chat messages from Minecraft, forward them to Discord log channel.
+    // Listen for chat messages from Minecraft and forward them to Discord log channel.
     bot.on('chat', async (username, message) => {
         try {
             const logChannel = await client.channels.fetch(logChannelId);
             if(logChannel && logChannel.isTextBased()){
-                await logChannel.send(`🗣 [MC] **${username}**: ${message}`);
+                await logChannel.send(`🗣 [ Rylix SMP ] **${username}**: ${message}`);
             }
         } catch(err){
             console.error('Error during chat event:', err);
