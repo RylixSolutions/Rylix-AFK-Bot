@@ -12,8 +12,10 @@ const {
 } = require('discord.js');
 const mineflayer = require('mineflayer');
 
-const token = ''; //add Token Here
-const logChannelId = ''; //log channel id
+const token = 'YOUR_DISCORD_BOT_TOKEN_HERE'; // Replace with your bot token
+const logChannelId = '1359150301806067883';
+const rylixLogo = 'https://cdn.imrishmika.site/rylix/RYLIX-white.png';
+
 const client = new Client({ 
     intents: [
         GatewayIntentBits.Guilds, 
@@ -28,20 +30,59 @@ client.login(token);
 
 const userSessions = {};
 
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`Discord bot logged in as ${client.user.tag} 🎉`);
-    registerCommands();
+    await registerCommands();
 });
 
-// Slash command interactions and other interactions
+// Registers slash commands using modern discord.js application commands
+async function registerCommands() {
+    const commands = [
+        {
+            name: 'settings',
+            description: 'Add and save a Minecraft server connection',
+            options: [
+                { name: 'host', description: 'Server host (IP/domain)', type: 3, required: true },
+                { name: 'port', description: 'Server port', type: 4, required: true },
+                { name: 'username', description: 'Username for the bot', type: 3, required: true }
+            ]
+        },
+        { name: 'connect', description: 'Connect to the saved server' },
+        { name: 'disconnect', description: 'Disconnect the bot from the server' },
+        {
+            name: 'setcommand',
+            description: 'Set a command to automatically execute on connection',
+            options: [{ name: 'command', description: 'The command to be executed', type: 3, required: true }]
+        },
+        {
+            name: 'setdelay',
+            description: 'Set reconnect delay (in seconds)',
+            options: [{ name: 'delay', description: 'Delay in seconds before reconnecting', type: 4, required: true }]
+        },
+        { name: 'help', description: 'Get help with the bot commands' },
+        { name: 'panel', description: 'Open the bot control panel (requires active connection)' }
+    ];
+    await client.application.commands.set(commands);
+}
+
+// Utility: Create a modern embed with Rylix logo
+function createEmbed(title, description, color = 0x00AE86){
+    return new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(description)
+        .setColor(color)
+        .setThumbnail(rylixLogo)
+        .setFooter({ text: 'Rylix AFK Bot', iconURL: rylixLogo });
+}
+
 client.on('interactionCreate', async interaction => {
     try {
-        // Handle slash commands first
-        if (interaction.isChatInputCommand()) {
+        // Slash Commands
+        if(interaction.isChatInputCommand()){
             const { commandName, options, user } = interaction;
             const userId = user.id;
-        
-            switch (commandName) {
+            
+            switch(commandName) {
                 case 'settings':
                     handleSettingsCommand(interaction, userId, options);
                     break;
@@ -64,58 +105,58 @@ client.on('interactionCreate', async interaction => {
                     await handlePanelCommand(interaction, userId);
                     break;
                 default:
-                    await interaction.reply({ content: 'Unknown command 😕', ephemeral: true });
+                    await interaction.reply({ embeds: [createEmbed('Error', 'Unknown command 😕')], ephemeral: true });
             }
             return;
         }
-    
-        // Handle button interactions from the Discord control panel
-        if (interaction.isButton()) {
+        
+        // Button interactions from the control panel
+        if(interaction.isButton()){
             const userId = interaction.user.id;
             const session = userSessions[userId];
-            if (!session || !session.bot) {
-                await interaction.reply({ content: 'No active bot session found 😕', ephemeral: true });
+            if(!session || !session.bot){
+                await interaction.reply({ embeds: [createEmbed('Error', 'No active bot connection found.')], ephemeral: true });
                 return;
             }
-            switch (interaction.customId) {
+            switch(interaction.customId) {
                 case 'jump': {
-                    // Toggle jump loop: if already jumping, stop; if not, start jumping repeatedly
-                    if (session.jumpInterval) {
+                    // Toggle jump loop: if already jumping, stop; else start repeating jumps to simulate natural jumping.
+                    if(session.jumpInterval) {
                         clearInterval(session.jumpInterval);
                         delete session.jumpInterval;
-                        await interaction.reply({ content: 'Stopped jump loop! 😌', ephemeral: true });
+                        await interaction.reply({ embeds: [createEmbed('Jump', 'Stopped jump loop! 😌')], ephemeral: true });
                     } else {
-                        session.jumpInterval = setInterval(() => { 
+                        session.jumpInterval = setInterval(() => {
                             try {
                                 session.bot.jump();
-                            } catch(e) {
-                                console.error("Error during jump loop:", e);
+                            } catch(e){
+                                console.error("Error in jump loop:", e);
                             }
                         }, 800);
-                        // Auto-stop the jump loop after 5 seconds
-                        setTimeout(() => { 
+                        // auto-stop jump loop after 5 seconds if not manually stopped
+                        setTimeout(() => {
                             if(session.jumpInterval) {
                                 clearInterval(session.jumpInterval);
                                 delete session.jumpInterval;
                             }
                         }, 5000);
-                        await interaction.reply({ content: 'Bot is jumping repeatedly! 🚀', ephemeral: true });
+                        await interaction.reply({ embeds: [createEmbed('Jump', 'Bot is jumping repeatedly! 🚀')] , ephemeral: true });
                     }
                     break;
                 }
                 case 'look_around': {
-                    // Rotate to a random yaw between 0 and 2π radians
                     const randomYaw = Math.random() * (2 * Math.PI);
                     session.bot.look(randomYaw, 0, true);
-                    await interaction.reply({ content: 'Bot is looking around... 👀', ephemeral: true });
+                    await interaction.reply({ embeds: [createEmbed('Look Around', 'Bot is looking around... 👀')], ephemeral: true });
                     break;
                 }
-                case 'disconnect_bot':
+                case 'disconnect_bot': {
                     session.connect = false;
                     session.bot.end();
                     delete session.bot;
-                    await interaction.reply({ content: 'Bot disconnected! 👋', ephemeral: true });
+                    await interaction.reply({ embeds: [createEmbed('Disconnect', 'Bot disconnected! 👋')], ephemeral: true });
                     break;
+                }
                 case 'change_name': {
                     const modal = new ModalBuilder()
                         .setCustomId('modal_change_name')
@@ -130,7 +171,6 @@ client.on('interactionCreate', async interaction => {
                     
                     const actionRow = new ActionRowBuilder().addComponents(nameInput);
                     modal.addComponents(actionRow);
-    
                     await interaction.showModal(modal);
                     break;
                 }
@@ -141,184 +181,179 @@ client.on('interactionCreate', async interaction => {
                     
                     const messageInput = new TextInputBuilder()
                         .setCustomId('chat_message')
-                        .setLabel('Enter chat message')
+                        .setLabel('Enter your message')
                         .setStyle(TextInputStyle.Paragraph)
                         .setPlaceholder('Type your message here...')
                         .setRequired(true);
                     
                     const actionRow = new ActionRowBuilder().addComponents(messageInput);
                     modal.addComponents(actionRow);
-    
                     await interaction.showModal(modal);
                     break;
                 }
                 default:
-                    await interaction.reply({ content: 'Unknown action 😕', ephemeral: true });
+                    await interaction.reply({ embeds: [createEmbed('Error', 'Unknown action 😕')], ephemeral: true });
             }
             return;
         }
         
-        // Handle modal submissions
-        if (interaction.isModalSubmit()) {
+        // Modal submissions
+        if(interaction.isModalSubmit()){
             const userId = interaction.user.id;
             const session = userSessions[userId];
-            if (!session) {
-                await interaction.reply({ content: 'Session not found 😕', ephemeral: true });
+            if(!session){
+                await interaction.reply({ embeds: [createEmbed('Error', 'Session not found!')], ephemeral: true });
                 return;
             }
-            if (interaction.customId === 'modal_change_name') {
+            if(interaction.customId === 'modal_change_name'){
                 const newUsername = interaction.fields.getTextInputValue('new_username');
-                // Save new username in settings and reconnect if necessary
                 session.username = newUsername;
-                if (session.bot) {
+                if(session.bot){
                     session.bot.end();
                     delete session.bot;
                 }
-                if (session.connect) {
+                if(session.connect) {
                     session.bot = createBot(session, userId);
                 }
-                await interaction.reply({ content: `Bot username changed to **${newUsername}** and reconnected (if online). 👍`, ephemeral: true });
-            } else if (interaction.customId === 'modal_send_message') {
+                await interaction.reply({ embeds: [createEmbed('Name Changed', `Bot username changed to **${newUsername}** and reconnected (if online). 👍`)], ephemeral: true });
+            } else if(interaction.customId === 'modal_send_message'){
                 const chatMessage = interaction.fields.getTextInputValue('chat_message');
-                if (session.bot) {
+                if(session.bot){
                     session.bot.chat(chatMessage);
-                    await interaction.reply({ content: 'Message sent! ✉️', ephemeral: true });
+                    await interaction.reply({ embeds: [createEmbed('Message Sent', 'Your message was sent to the Minecraft server chat! ✉️')], ephemeral: true });
                 } else {
-                    await interaction.reply({ content: 'Bot is not connected 😕', ephemeral: true });
+                    await interaction.reply({ embeds: [createEmbed('Error', 'Bot is not connected 😕')], ephemeral: true });
                 }
             }
             return;
         }
-    } catch (error) {
+    } catch(error) {
         console.error('Interaction error:', error);
         try {
-            await interaction.reply({ content: 'An error occurred while handling your interaction 😥', ephemeral: true });
-        } catch (_) {
+            await interaction.reply({ embeds: [createEmbed('Error', 'An error occurred while processing your interaction 😥')], ephemeral: true });
+        } catch(_) {
             console.error('Failed to send error reply.');
         }
     }
 });
 
-// Slash command: /settings
+// /settings command: Save server connection settings and remember for future sessions
 function handleSettingsCommand(interaction, userId, options) {
     const host = options.getString('host');
     const port = options.getInteger('port');
     const username = options.getString('username');
-
+    
+    // Save or update the user's server settings
     userSessions[userId] = {
         host,
         port,
         username,
         connect: false,
-        delay: 5000  
+        delay: 5000  // default delay before reconnecting is 5 seconds
     };
-
-    interaction.reply(`Saved connection settings: **${host}:${port}** with username **${username}** 😊`);
+    
+    interaction.reply({ embeds: [
+        createEmbed('Settings Saved', 
+            `Server connection saved:\n**Host:** ${host}\n**Port:** ${port}\n**Username:** ${username}\n\nYour connection details have been stored for future use. 😊`)
+    ], ephemeral: true });
 }
 
-// Slash command: /connect
+// /connect command: Connect to the saved server and remember connection
 async function handleConnectCommand(interaction, userId) {
     const session = userSessions[userId];
-
-    if (!session || !session.host || !session.port || !session.username) {
-        await interaction.reply('You need to set up the settings first with the `/settings` command 😕');
+    if(!session || !session.host || !session.port || !session.username){
+        await interaction.reply({ embeds: [createEmbed('Error', 'You need to set up the server using `/settings` first 😕')], ephemeral: true });
         return;
     }
-
-    await interaction.reply('Trying to connect to the server... ⏳');
-
+    
+    await interaction.reply({ embeds: [createEmbed('Connecting', 'Attempting to connect to the server... ⏳')], ephemeral: true });
     session.connect = true;
     session.bot = createBot(session, userId);
 }
 
-// Slash command: /disconnect
+// /disconnect command: Disconnect from the current server
 async function handleDisconnectCommand(interaction, userId) {
     const session = userSessions[userId];
-
-    if (session && session.bot) {
+    if(session && session.bot){
         session.connect = false;
         session.bot.end();
         delete session.bot;
-        await interaction.reply('Disconnected from the server. 👋');
+        await interaction.reply({ embeds: [createEmbed('Disconnected', 'Bot successfully disconnected from the server. 👋')] , ephemeral: true});
     } else {
-        await interaction.reply('I was not connected to the server 😕');
+        await interaction.reply({ embeds: [createEmbed('Error', 'Bot is not currently connected to any server 😕')], ephemeral: true });
     }
 }
 
-// Slash command: /setcommand
+// /setcommand command: Set a command to execute upon successful connection
 async function handleSetCommand(interaction, userId, options) {
     const command = options.getString('command');
-
-    if (!userSessions[userId]) {
+    if(!userSessions[userId]){
         userSessions[userId] = {};
     }
-
     userSessions[userId].commandOnConnect = command;
-    await interaction.reply({ content: `I will execute the command \`${command}\` after connecting to the server. 👍`, ephemeral: true });
+    await interaction.reply({ embeds: [createEmbed('Command Set', `Command \`${command}\` will execute upon connecting to the server. 👍`)], ephemeral: true });
 }
 
-// Slash command: /setdelay
+// /setdelay command: Set how long to wait before reconnecting
 async function handleSetDelayCommand(interaction, userId, options) {
     const delay = options.getInteger('delay');
-
-    if (!userSessions[userId]) {
+    if(!userSessions[userId]){
         userSessions[userId] = {};
     }
-
     userSessions[userId].delay = delay * 1000;
-    await interaction.reply({ content: `I will now wait ${delay} seconds before reconnecting to the server. ⏰`});
+    await interaction.reply({ embeds: [createEmbed('Delay Set', `Reconnect delay has been set to **${delay} seconds**. ⏰`)] , ephemeral: true});
 }
 
-// Slash command: /help
+// /help command: Provide usage instructions in a modern embedded design
 async function handleHelpCommand(interaction) {
     const helpMessage = `
-**Hello!** 😄
+**Rylix AFK Bot Help** 😄
 
-I can stand in for you on the server while you handle your tasks.
-Before you start, set up the server connection settings using:
+**Setup your server:**
 \`/settings <host> <port> <username>\`
-(Note: I only connect to servers **1.18 to 1.20.4 with cracked versions**.)
 
-To connect, use \`/connect\`, and to disconnect use \`/disconnect\`.
-If you want me to execute a command on join (for passwords or the like), use:
+**Connect:**
+\`/connect\`
+
+**Disconnect:**
+\`/disconnect\`
+
+**Set a command for auto-execution on connect:**
 \`/setcommand <command>\`
-If I get disconnected, I'll try to reconnect after 5 seconds; to adjust this delay use:
-\`/setdelay <delay_in_seconds>\`.
 
-You can also open my control panel with \`/panel\` for in-game commands!
+**Set reconnect delay:**
+\`/setdelay <delay_in_seconds>\`
+
+**Control Panel:**
+\`/panel\` - Open the interactive panel to make the bot jump, look around, change name, or send a chat message.
+
+_Note: The bot connects to Minecraft servers (versions 1.18 - 1.20.4) using offline mode._
     `;
-    await interaction.reply({ content: helpMessage });
+    await interaction.reply({ embeds: [createEmbed('Help', helpMessage)] });
 }
 
-// Slash command: /panel - open the bot control panel (only if connected)
+// /panel command: Open the interactive control panel for the bot
 async function handlePanelCommand(interaction, userId) {
     const session = userSessions[userId];
-    if (!session || !session.bot) {
-        await interaction.reply({ content: 'You must be connected to the server to use the panel 😕', ephemeral: true });
+    if(!session || !session.bot){
+        await interaction.reply({ embeds: [createEmbed('Error', 'Please connect to a server using `/connect` before using the control panel.')], ephemeral: true });
         return;
     }
-
-    const embed = new EmbedBuilder()
-        .setTitle('Rylix AFK Bot Control Panel')
-        .setDescription('Use the buttons below to control your bot. Enjoy! 🎮')
-        .setColor(0x00AE86)
-        .setThumbnail('https://cdn.imrishmika.site/rylix/RYLIX-white.png');
     
+    const embed = createEmbed('Rylix AFK Bot Control Panel', 'Use the buttons below to control your bot. Enjoy! 🎮');
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('jump').setLabel('Jump 🚀').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('look_around').setLabel('Look Around 👀').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('disconnect_bot').setLabel('Disconnect 👋').setStyle(ButtonStyle.Danger)
     );
-
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('change_name').setLabel('Change Name 💫').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('send_message').setLabel('Send Message ✉️').setStyle(ButtonStyle.Secondary)
     );
-
     await interaction.reply({ embeds: [embed], components: [row, row2], ephemeral: true });
 }
 
-// Create the Mineflayer bot and define its event handlers, including listening to every chat command and message
+// Create the Mineflayer bot and setup event handlers
 function createBot(session, userId) {
     const bot = mineflayer.createBot({
         host: session.host,
@@ -326,72 +361,68 @@ function createBot(session, userId) {
         username: session.username,
         auth: 'offline'
     });
-
     let errorHandled = false;
-
+    
     bot.on('spawn', async () => {
         console.log(`Mineflayer bot logged in as ${bot.username} 🤖`);
         try {
             const logChannel = await client.channels.fetch(logChannelId);
-            if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`Connected to the server \`${session.host}:${session.port}\` as \`${session.username}\` 🎉`);
+            if(logChannel && logChannel.isTextBased()){
+                await logChannel.send(`Connected to ${session.host}:${session.port} as ${session.username} 🎉`);
             }
-        } catch (err) {
+        } catch(err){
             console.error('Error fetching log channel:', err);
         }
-        // Send a fun in-game chat message when the bot spawns
         bot.chat("Rylix AFK 🤖");
-    
-        if (session.commandOnConnect) {
+        if(session.commandOnConnect){
             bot.chat(session.commandOnConnect);
         }
     });
-
-    // Listen to every chat message and command in the Minecraft server
+    
+    // Listen for chat messages from Minecraft, forward them to Discord log channel.
     bot.on('chat', async (username, message) => {
         try {
-            // Log every chat message from the server to the designated Discord channel
             const logChannel = await client.channels.fetch(logChannelId);
-            if (logChannel && logChannel.isTextBased()) {
+            if(logChannel && logChannel.isTextBased()){
                 await logChannel.send(`🗣 [MC] **${username}**: ${message}`);
             }
-        } catch (err) {
+        } catch(err){
             console.error('Error during chat event:', err);
         }
     });
-
+    
     bot.on('end', async () => {
-        if (!errorHandled) {
+        if(!errorHandled){
             errorHandled = true;
             await handleBotDisconnection(userId, session);
         }
     });
-
+    
     bot.on('error', async error => {
-        if (!errorHandled) {
+        if(!errorHandled){
             errorHandled = true;
             await handleBotError(userId, session, error);
         }
     });
-
+    
     return bot;
 }
 
 async function handleBotDisconnection(userId, session) {
     console.log(`Bot disconnected from ${session.host}:${session.port}`);
     try {
-        if (userSessions[userId] && userSessions[userId].connect === true) {
+        if(userSessions[userId] && userSessions[userId].connect === true) {
             const logChannel = await client.channels.fetch(logChannelId);
-            if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`<@${userId}>, I was disconnected from \`${session.host}:${session.port}\`. I will try to reconnect in ${session.delay / 1000} seconds ⏰.`);
+            if(logChannel && logChannel.isTextBased()){
+                await logChannel.send(`<@${userId}>, disconnected from ${session.host}:${session.port}. Reconnecting in ${session.delay / 1000}s ⏰`);
             }
             setTimeout(() => {
-                if (userSessions[userId] && userSessions[userId].connect) {
+                if(userSessions[userId] && userSessions[userId].connect){
                     userSessions[userId].bot = createBot(session, userId);
                 }
             }, session.delay);
         }
-    } catch (err) {
+    } catch(err) {
         console.error('Error during handleBotDisconnection:', err);
     }
 }
@@ -399,48 +430,19 @@ async function handleBotDisconnection(userId, session) {
 async function handleBotError(userId, session, error) {
     console.error('Bot error:', error);
     try {
-        if (userSessions[userId] && userSessions[userId].connect === true) {
+        if(userSessions[userId] && userSessions[userId].connect === true) {
             const logChannel = await client.channels.fetch(logChannelId);
-            if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`<@${userId}>, I encountered an error connecting to \`${session.host}:${session.port}\`. Please try again with \`/connect\` 😥.`);
+            if(logChannel && logChannel.isTextBased()){
+                await logChannel.send(`<@${userId}>, encountered an error connecting to ${session.host}:${session.port}. Please try again with /connect 😥`);
             }
             userSessions[userId].connect = false;
-            if (session && session.bot) {
+            if(session && session.bot){
                 session.bot.removeAllListeners();
                 session.bot.end();
                 delete session.bot;
             }
         }
-    } catch (err) {
+    } catch(err) {
         console.error('Error during handleBotError:', err);
     }
-}
-
-function registerCommands() {
-    const commands = [
-        {
-            name: 'settings',
-            description: 'Set connection settings',
-            options: [
-                { name: 'host', description: 'Server host', type: 3, required: true },
-                { name: 'port', description: 'Server port', type: 4, required: true },
-                { name: 'username', description: 'Username', type: 3, required: true }
-            ]
-        },
-        { name: 'connect', description: 'Connect to the server' },
-        { name: 'disconnect', description: 'Disconnect from the server' },
-        {
-            name: 'setcommand',
-            description: 'Set command to execute upon connection',
-            options: [{ name: 'command', description: 'Command to execute', type: 3, required: true }]
-        },
-        {
-            name: 'setdelay',
-            description: 'Set delay before reconnecting',
-            options: [{ name: 'delay', description: 'Delay in seconds', type: 4, required: true }]
-        },
-        { name: 'help', description: 'Get command help' },
-        { name: 'panel', description: 'Open bot control panel (for AFK bot owner)' }
-    ];
-    client.application.commands.set(commands);
 }
