@@ -123,25 +123,24 @@ client.on('interactionCreate', async interaction => {
             }
             switch(interaction.customId) {
                 case 'jump': {
-                    // Enhanced jump command:
-                    // Toggle jump loop: if already jumping, stop; else start repeating jumps to simulate natural jumping.
-                    if(session.jumpInterval) {
-                        clearInterval(session.jumpInterval);
-                        delete session.jumpInterval;
-                        await interaction.reply({ embeds: [createEmbed('Jump', 'Stopped jump loop! 😌')], ephemeral: true });
+                    // Enhanced jump command: Toggle jump loop on button press
+                    if(session.manualJumpInterval) {
+                        clearInterval(session.manualJumpInterval);
+                        delete session.manualJumpInterval;
+                        await interaction.reply({ embeds: [createEmbed('Jump', 'Stopped manual jump loop! 😌')], ephemeral: true });
                     } else {
-                        session.jumpInterval = setInterval(() => {
+                        session.manualJumpInterval = setInterval(() => {
                             try {
                                 session.bot.jump();
                             } catch(e){
-                                console.error("Error in jump loop:", e);
+                                console.error("Error in manual jump loop:", e);
                             }
                         }, 800);
                         // auto-stop jump loop after 5 seconds if not manually stopped
                         setTimeout(() => {
-                            if(session.jumpInterval) {
-                                clearInterval(session.jumpInterval);
-                                delete session.jumpInterval;
+                            if(session.manualJumpInterval) {
+                                clearInterval(session.manualJumpInterval);
+                                delete session.manualJumpInterval;
                             }
                         }, 5000);
                         await interaction.reply({ embeds: [createEmbed('Jump', 'Bot is jumping repeatedly! 🚀')], ephemeral: true });
@@ -150,7 +149,7 @@ client.on('interactionCreate', async interaction => {
                 }
                 case 'look_around': {
                     const randomYaw = Math.random() * (2 * Math.PI);
-                    session.bot.look(randomYaw, 0, true);
+                    session.bot.look(randomYaw, session.bot.entity.pitch, true);
                     await interaction.reply({ embeds: [createEmbed('Look Around', 'Bot is looking around... 👀')], ephemeral: true });
                     break;
                 }
@@ -291,6 +290,7 @@ async function handleDisconnectCommand(interaction, userId) {
     const session = userSessions[userId];
     if(session && session.bot){
         session.connect = false;
+        cleanupBotTimers(session.bot);
         session.bot.end();
         delete session.bot;
         await interaction.reply({ embeds: [createEmbed('Disconnected', 'Bot successfully disconnected from the server. 👋')], ephemeral: true });
@@ -369,7 +369,7 @@ async function handlePanelCommand(interaction, userId) {
     await interaction.reply({ embeds: [embed], components: [row, row2], ephemeral: true });
 }
 
-// Create the Mineflayer bot and setup event handlers
+// Create the Mineflayer bot and setup event handlers with keep-alive features
 function createBot(session, userId) {
     const bot = mineflayer.createBot({
         host: session.host,
@@ -381,6 +381,7 @@ function createBot(session, userId) {
     
     bot.on('spawn', async () => {
         console.log(`Mineflayer bot logged in as ${bot.username} 🤖`);
+        // Log connection
         try {
             const logChannel = await client.channels.fetch(logChannelId);
             if(logChannel && logChannel.isTextBased()){
@@ -393,6 +394,8 @@ function createBot(session, userId) {
         if(session.commandOnConnect){
             bot.chat(session.commandOnConnect);
         }
+        // Start keep-alive timers:
+        scheduleKeepAlive(bot);
     });
     
     // Listen for chat messages from Minecraft and forward them to Discord log channel.
@@ -408,6 +411,7 @@ function createBot(session, userId) {
     });
     
     bot.on('end', async () => {
+        cleanupKeepAlive(bot);
         if(!errorHandled){
             errorHandled = true;
             await handleBotDisconnection(userId, session);
@@ -415,6 +419,7 @@ function createBot(session, userId) {
     });
     
     bot.on('error', async error => {
+        cleanupKeepAlive(bot);
         if(!errorHandled){
             errorHandled = true;
             await handleBotError(userId, session, error);
@@ -422,6 +427,49 @@ function createBot(session, userId) {
     });
     
     return bot;
+}
+
+// Schedules keep-alive actions: look around every 15 seconds and a single jump every 10 minutes.
+function scheduleKeepAlive(bot) {
+    // Look around timer every 15 seconds.
+    bot.keepAliveLookInterval = setInterval(() => {
+        try {
+            const randomYaw = Math.random() * (2 * Math.PI);
+            bot.look(randomYaw, bot.entity.pitch, true);
+        } catch (e) {
+            console.error('Error in keep-alive look interval:', e);
+        }
+    }, 15000);
+
+    // Jump once every 10 minutes.
+    bot.keepAliveJumpInterval = setInterval(() => {
+        try {
+            bot.jump();
+        } catch (e) {
+            console.error('Error in keep-alive jump interval:', e);
+        }
+    }, 600000);
+}
+
+// Clears keep-alive timers for the bot.
+function cleanupKeepAlive(bot) {
+    if(bot.keepAliveLookInterval) {
+        clearInterval(bot.keepAliveLookInterval);
+        delete bot.keepAliveLookInterval;
+    }
+    if(bot.keepAliveJumpInterval) {
+        clearInterval(bot.keepAliveJumpInterval);
+        delete bot.keepAliveJumpInterval;
+    }
+}
+
+// Cleanup any additional bot timers (if any manual timers exist)
+function cleanupBotTimers(bot) {
+    cleanupKeepAlive(bot);
+    if(bot.manualJumpInterval) {
+        clearInterval(bot.manualJumpInterval);
+        delete bot.manualJumpInterval;
+    }
 }
 
 async function handleBotDisconnection(userId, session) {
@@ -454,6 +502,7 @@ async function handleBotError(userId, session, error) {
             userSessions[userId].connect = false;
             if(session && session.bot){
                 session.bot.removeAllListeners();
+                cleanupBotTimers(session.bot);
                 session.bot.end();
                 delete session.bot;
             }
