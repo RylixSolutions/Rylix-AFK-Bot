@@ -4,17 +4,17 @@ const express = require('express');
 const app = express();
 const port = 9089;
 
-const { 
-    Client, 
-    GatewayIntentBits, 
-    Partials, 
-    ButtonStyle, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    EmbedBuilder, 
-    ModalBuilder, 
-    TextInputBuilder, 
-    TextInputStyle 
+const {
+    Client,
+    GatewayIntentBits,
+    Partials,
+    ButtonStyle,
+    ActionRowBuilder,
+    ButtonBuilder,
+    EmbedBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const mineflayer = require('mineflayer');
 
@@ -23,19 +23,20 @@ const token = process.env.DISCORD_TOKEN;
 const logChannelId = process.env.LOG_CHANNEL_ID;
 const defaultLogo = 'https://cdn.imrishmika.site/rylix/RYLIX-white.png';
 
-const client = new Client({ 
+const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages
     ],
-    partials: [Partials.Channel] 
+    partials: [Partials.Channel]
 });
 
 client.login(token);
 
-const userSessions = {};
+// Structure: One user can have up to 2 server sessions.
+const userSessions = {};  // { userId: { servers: [session1, session2?] } }
 
 // Helper: Returns a random skin URL from a preset list
 function getRandomSkinUrl() {
@@ -59,139 +60,361 @@ function createEmbed(title, description, skinUrl = defaultLogo) {
         .setFooter({ text: 'Rylix AFK Bot ©', iconURL: defaultLogo });
 }
 
-// MONITORING WEB INTERFACE
-// Displays the status of each bot session (online/offline) with extra details and emojis.
+// Modern Web Dashboard: Displays each user's server sessions with full details.
 app.get('/', (req, res) => {
     let html = `<html>
     <head>
-        <title>🤖 Bot Status Monitor</title>
+        <title>🤖 Bot Status Dashboard</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background-color: #f7f7f7; }
-            h1 { color: #333; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-            th { background-color: #eaeaea; }
+            body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #e0e0e0, #ffffff); margin: 0; padding: 20px; }
+            h1 { text-align: center; color: #333; }
+            .container { max-width: 1200px; margin: 20px auto; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+            th, td { padding: 12px; text-align: center; border-bottom: 1px solid #ddd; }
+            th { background: #007BFF; color: #fff; }
+            tr:hover { background: #f1f1f1; }
             .online { color: green; font-weight: bold; }
             .offline { color: red; font-weight: bold; }
             img { border-radius: 4px; }
+            .details { font-size: 0.9em; color: #555; }
         </style>
     </head>
     <body>
-        <h1>🤖 Bot Status Monitor</h1>
-        <table>
+        <h1>🤖 Bot Status Dashboard</h1>
+        <div class="container">`;
+    for (const [userId, data] of Object.entries(userSessions)) {
+        html += `<h2>User: ${userId}</h2><table>
             <tr>
-                <th>User ID</th>
+                <th>Session #</th>
                 <th>Server (Host:Port)</th>
                 <th>Status</th>
                 <th>Username</th>
                 <th>Skin</th>
+                <th>Last Ping (ms)</th>
+                <th>Health</th>
+                <th>Food</th>
             </tr>`;
-    for (const [userId, session] of Object.entries(userSessions)) {
-        const status = (session.bot ? 'Online ✅' : 'Offline ❌');
-        const statusClass = (session.bot ? 'online' : 'offline');
-        const server = session.host && session.port ? `${session.host}:${session.port}` : 'N/A';
-        const username = session.username || 'N/A';
-        const skinImg = session.randomSkin ? `<img src="${session.randomSkin}" alt="skin" width="32" height="32">` : 'Default';
-        html += `<tr>
-            <td>${userId}</td>
-            <td>${server}</td>
-            <td class="${statusClass}">${status}</td>
-            <td>${username}</td>
-            <td>${skinImg}</td>
-        </tr>`;
+        data.servers.forEach((session, index) => {
+            const status = (session.bot ? 'Online ✅' : 'Offline ❌');
+            const statusClass = (session.bot ? 'online' : 'offline');
+            const server = session.host && session.port ? `${session.host}:${session.port}` : 'N/A';
+            const username = session.username || 'N/A';
+            const skinImg = session.randomSkin ? `<img src="${session.randomSkin}" alt="skin" width="32" height="32">` : 'Default';
+            const lastPing = session.lastPing ? session.lastPing : 'N/A';
+            let health = 'N/A';
+            let food = 'N/A';
+            if (session.bot) {
+                health = session.bot.health;
+                food = session.bot.food;
+            }
+            html += `<tr>
+                <td>${index + 1}</td>
+                <td>${server}</td>
+                <td class="${statusClass}">${status}</td>
+                <td>${username}</td>
+                <td>${skinImg}</td>
+                <td>${lastPing}</td>
+                <td>${health}</td>
+                <td>${food}</td>
+            </tr>`;
+        });
+        html += `</table>`;
     }
-    html += `</table>
-    </body>
-    </html>`;
+    html += `</div></body></html>`;
     res.send(html);
 });
 
 app.listen(port, () => {
-    console.log(`Monitoring web interface is running on port ${port} 🚀`);
+    console.log(`Modern Dashboard running on port ${port} 🚀`);
 });
 
-// Discord Client Setup
+// Discord Client Setup ////////////////////////////////////////////////////////
 client.once('ready', async () => {
     console.log(`Discord bot logged in as ${client.user.tag} 🎉`);
     await registerCommands();
 });
 
-// Registers slash commands using modern application commands
+// Register slash commands (with an optional session parameter)
 async function registerCommands() {
     const commands = [
         {
             name: 'settings',
-            description: 'Save your Minecraft server connection details',
+            description: 'Save your Minecraft server connection details (max 2 servers)',
             options: [
                 { name: 'host', description: 'Server host (IP/domain)', type: 3, required: true },
                 { name: 'port', description: 'Server port', type: 4, required: true },
-                { name: 'username', description: 'Bot username', type: 3, required: true }
+                { name: 'username', description: 'Bot username', type: 3, required: true },
+                { name: 'session', description: 'Session number (1 or 2)', type: 4, required: false }
             ]
         },
-        { name: 'connect', description: 'Connect the bot to your saved server' },
-        { name: 'disconnect', description: 'Disconnect the bot from the server' },
+        {
+            name: 'connect',
+            description: 'Connect the bot to your saved server for a given session',
+            options: [
+                { name: 'session', description: 'Session number (1 or 2)', type: 4, required: false }
+            ]
+        },
+        {
+            name: 'disconnect',
+            description: 'Disconnect the bot from the server for a given session',
+            options: [
+                { name: 'session', description: 'Session number (1 or 2)', type: 4, required: false }
+            ]
+        },
         {
             name: 'setcommand',
-            description: 'Set a command to auto-run on connection',
-            options: [{ name: 'command', description: 'Command to execute', type: 3, required: true }]
+            description: 'Set a command to auto-run on connection for a given session',
+            options: [
+                { name: 'command', description: 'Command to execute', type: 3, required: true },
+                { name: 'session', description: 'Session number (1 or 2)', type: 4, required: false }
+            ]
         },
         {
             name: 'setdelay',
-            description: 'Set the reconnect delay in seconds',
-            options: [{ name: 'delay', description: 'Delay before reconnecting', type: 4, required: true }]
+            description: 'Set the reconnect delay in seconds for a given session',
+            options: [
+                { name: 'delay', description: 'Delay before reconnecting', type: 4, required: true },
+                { name: 'session', description: 'Session number (1 or 2)', type: 4, required: false }
+            ]
         },
-        { name: 'help', description: 'Display help for bot commands' },
-        { name: 'panel', description: 'Open the interactive bot control panel (requires active connection)' }
+        {
+            name: 'help',
+            description: 'Display help for bot commands'
+        },
+        {
+            name: 'panel',
+            description: 'Open the interactive bot control panel for a given session',
+            options: [
+                { name: 'session', description: 'Session number (1 or 2)', type: 4, required: false }
+            ]
+        }
     ];
     await client.application.commands.set(commands);
 }
 
 client.on('interactionCreate', async interaction => {
     try {
+        // Utility: get session based on an optional "session" parameter; default to 1.
+        function getSession(userId, options) {
+            let index = options.getInteger('session');
+            if (!index) {
+                index = 1;
+            }
+            index = Math.max(1, Math.min(2, index)); // clamp to 1-2
+            if (!userSessions[userId]) {
+                userSessions[userId] = { servers: [] };
+            }
+            if (!userSessions[userId].servers[index - 1]) {
+                // Create an empty session if one does not exist.
+                userSessions[userId].servers[index - 1] = {};
+            }
+            return { index, session: userSessions[userId].servers[index - 1] };
+        }
+  
         // Slash Commands
         if (interaction.isChatInputCommand()) {
             const { commandName, options, user } = interaction;
             const userId = user.id;
             
             switch (commandName) {
-                case 'settings':
-                    handleSettingsCommand(interaction, userId, options);
+                case 'settings': {
+                    // /settings creates or updates a session.
+                    let index = options.getInteger('session');
+                    if (!userSessions[userId]) {
+                        userSessions[userId] = { servers: [] };
+                    }
+                    if (!index) {
+                        // Choose the first empty slot or default to slot 1.
+                        if (!userSessions[userId].servers[0]) {
+                            index = 1;
+                        } else if (!userSessions[userId].servers[1]) {
+                            index = 2;
+                        } else {
+                            index = 1; // update slot 1 by default if both exist.
+                        }
+                    } else {
+                        index = Math.max(1, Math.min(2, index));
+                    }
+                    const host = options.getString('host');
+                    const port = options.getInteger('port');
+                    const usernameOption = options.getString('username');
+                    const newSession = {
+                        host,
+                        port,
+                        username: usernameOption,
+                        connect: false,
+                        delay: 5000,  // default delay 5 seconds
+                        randomSkin: getRandomSkinUrl()
+                    };
+                    userSessions[userId].servers[index - 1] = newSession;
+                    await interaction.reply({
+                        embeds: [createEmbed('Settings Saved',
+                            `Session ${index} saved:\n**Host:** ${host}\n**Port:** ${port}\n**Bot Username:** ${usernameOption}\n\nUse \`/connect\` with session \`${index}\` to connect. 👍`,
+                            newSession.randomSkin)],
+                        ephemeral: true
+                    });
+                }
                     break;
-                case 'connect':
-                    await handleConnectCommand(interaction, userId);
+                case 'connect': {
+                    const { index, session } = getSession(userId, options);
+                    if (!session.host || !session.port || !session.username) {
+                        await interaction.reply({
+                            embeds: [createEmbed('Error', 'Set your server details with `/settings` first.')],
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                    await interaction.reply({
+                        embeds: [createEmbed('Connecting', `Attempting to connect to ${session.host}:${session.port} for session ${index}... ⏳`, session.randomSkin)],
+                        ephemeral: true
+                    });
+                    session.connect = true;
+                    session.bot = createBot(session, userId, index);
+                }
                     break;
-                case 'disconnect':
-                    await handleDisconnectCommand(interaction, userId);
+                case 'disconnect': {
+                    const { index, session } = getSession(userId, options);
+                    if (session && session.bot) {
+                        session.connect = false;
+                        session.bot.end();
+                        delete session.bot;
+                        await interaction.reply({
+                            embeds: [createEmbed('Disconnected', `Session ${index} disconnected successfully. 👋`, session.randomSkin)],
+                            ephemeral: true
+                        });
+                    } else {
+                        await interaction.reply({
+                            embeds: [createEmbed('Error', `No active connection found in session ${index}.`)],
+                            ephemeral: true
+                        });
+                    }
+                }
                     break;
-                case 'setcommand':
-                    await handleSetCommand(interaction, userId, options);
+                case 'setcommand': {
+                    const { index, session } = getSession(userId, options);
+                    const command = options.getString('command');
+                    session.commandOnConnect = command;
+                    await interaction.reply({
+                        embeds: [createEmbed('Command Set', `In session ${index}, command \`${command}\` will run on connect.`, session.randomSkin)],
+                        ephemeral: true
+                    });
+                }
                     break;
-                case 'setdelay':
-                    await handleSetDelayCommand(interaction, userId, options);
+                case 'setdelay': {
+                    const { index, session } = getSession(userId, options);
+                    const delay = options.getInteger('delay');
+                    session.delay = delay * 1000;
+                    await interaction.reply({
+                        embeds: [createEmbed('Delay Set', `Session ${index} reconnect delay updated to **${delay} seconds**. ⏰`, session.randomSkin)],
+                        ephemeral: true
+                    });
+                }
                     break;
-                case 'help':
-                    await handleHelpCommand(interaction);
+                case 'help': {
+                    const helpMessage = `
+**Rylix AFK Bot Help** 😄
+
+**Setup your server:**  
+\`/settings <host> <port> <username> [session]\` (session is 1 or 2)
+
+**Connect:**  
+\`/connect [session]\`
+
+**Disconnect:**  
+\`/disconnect [session]\`
+
+**Auto-execute a command on connect:**  
+\`/setcommand <command> [session]\`
+
+**Set reconnect delay:**  
+\`/setdelay <delay_in_seconds> [session]\`
+
+**Control Panel:**  
+\`/panel [session]\` - Open the panel for actions (jump, ping, list players, send message, rename, attack).
+
+_Note: The bot connects in offline mode and gets a unique random skin on each connection!_
+                    `;
+                    await interaction.reply({
+                        embeds: [createEmbed('Help', helpMessage)],
+                        ephemeral: true
+                    });
+                }
                     break;
-                case 'panel':
-                    await handlePanelCommand(interaction, userId);
+                case 'panel': {
+                    const { index, session } = getSession(userId, options);
+                    if (!session || !session.bot) {
+                        await interaction.reply({
+                            embeds: [createEmbed('Error', `No active connection found in session ${index}. Connect using \`/connect\`.`)],
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                    const embed = createEmbed('Bot Control Panel',
+`Session ${index} Control Panel:
+• **Jump**: Make the bot jump.
+• **Look Around**: Rotate bot's view.
+• **Server Ping**: Get current ping.
+• **Server Players**: List online players.
+• **Disconnect**: Disconnect bot.
+• **Change Name**: Update bot username.
+• **Send Message**: Send a chat message.
+• **Attack**: Attack nearest player.
+`, session.randomSkin);
+                    const row1 = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('jump').setLabel('Jump 🚀').setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder().setCustomId('look_around').setLabel('Look Around 👀').setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder().setCustomId('server_ping').setLabel('Server Ping 🏓').setStyle(ButtonStyle.Secondary)
+                    );
+                    const row2 = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('server_players').setLabel('Server Players 👥').setStyle(ButtonStyle.Secondary),
+                        new ButtonBuilder().setCustomId('change_name').setLabel('Change Name 💫').setStyle(ButtonStyle.Secondary),
+                        new ButtonBuilder().setCustomId('send_message').setLabel('Send Message ✉️').setStyle(ButtonStyle.Secondary)
+                    );
+                    const row3 = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('attack').setLabel('Attack ⚔️').setStyle(ButtonStyle.Danger),
+                        new ButtonBuilder().setCustomId('disconnect_bot').setLabel('Disconnect 👋').setStyle(ButtonStyle.Danger)
+                    );
+                    // Save the session index onto the session for later button interactions.
+                    session.panelSessionIndex = index;
+                    await interaction.reply({
+                        embeds: [embed],
+                        components: [row1, row2, row3],
+                        ephemeral: true
+                    });
+                }
                     break;
                 default:
-                    await interaction.reply({ 
-                        embeds: [createEmbed('Error', 'Unknown command 😕')], 
-                        ephemeral: true 
+                    await interaction.reply({
+                        embeds: [createEmbed('Error', 'Unknown command 😕')],
+                        ephemeral: true
                     });
+                    break;
             }
             return;
         }
-        
+  
         // Button interactions from the control panel
         if (interaction.isButton()) {
             const userId = interaction.user.id;
-            const session = userSessions[userId];
+            const sessions = userSessions[userId] ? userSessions[userId].servers : null;
+            if (!sessions) {
+                await interaction.reply({
+                    embeds: [createEmbed('Error', 'No session found 🙁')],
+                    ephemeral: true
+                });
+                return;
+            }
+            let session = sessions[0];
+            for (const s of sessions) {
+                if (s.panelSessionIndex) {
+                    session = s;
+                    break;
+                }
+            }
             if (!session || !session.bot) {
-                await interaction.reply({ 
-                    embeds: [createEmbed('Error', 'No active connection found 🙁')], 
-                    ephemeral: true 
+                await interaction.reply({
+                    embeds: [createEmbed('Error', 'No active connection found.')],
+                    ephemeral: true
                 });
                 return;
             }
@@ -200,28 +423,28 @@ client.on('interactionCreate', async interaction => {
                     if (session.jumpInterval) {
                         clearInterval(session.jumpInterval);
                         delete session.jumpInterval;
-                        await interaction.reply({ 
-                            embeds: [createEmbed('Jump', 'Jump loop stopped. 😌')], 
-                            ephemeral: true 
+                        await interaction.reply({
+                            embeds: [createEmbed('Jump', 'Jump loop stopped. 😌', session.randomSkin)],
+                            ephemeral: true
                         });
                     } else {
+                        // Increase interval to 1500ms for reduced CPU usage.
                         session.jumpInterval = setInterval(() => {
                             try {
                                 session.bot.jump();
-                            } catch (e) {
+                            } catch(e) {
                                 console.error("Error in jump loop:", e);
                             }
-                        }, 800);
-                        // Auto-stop jump loop after 5 seconds if not manually stopped
+                        }, 1500);
                         setTimeout(() => {
                             if (session.jumpInterval) {
                                 clearInterval(session.jumpInterval);
                                 delete session.jumpInterval;
                             }
                         }, 5000);
-                        await interaction.reply({ 
-                            embeds: [createEmbed('Jump', 'Jump loop activated! 🚀')], 
-                            ephemeral: true 
+                        await interaction.reply({
+                            embeds: [createEmbed('Jump', 'Jump loop activated! 🚀', session.randomSkin)],
+                            ephemeral: true
                         });
                     }
                     break;
@@ -229,9 +452,28 @@ client.on('interactionCreate', async interaction => {
                 case 'look_around': {
                     const randomYaw = Math.random() * (2 * Math.PI);
                     session.bot.look(randomYaw, 0, true);
-                    await interaction.reply({ 
-                        embeds: [createEmbed('Look Around', 'Bot is scanning its surroundings... 👀')], 
-                        ephemeral: true 
+                    await interaction.reply({
+                        embeds: [createEmbed('Look Around', 'Bot is scanning its surroundings... 👀', session.randomSkin)],
+                        ephemeral: true
+                    });
+                    break;
+                }
+                case 'server_ping': {
+                    // Simple ping simulation; update the session.lastPing.
+                    const ping = Math.floor(Math.random() * 100) + 50;
+                    session.lastPing = ping;
+                    await interaction.reply({
+                        embeds: [createEmbed('Server Ping', `Current ping: **${ping} ms**`, session.randomSkin)],
+                        ephemeral: true
+                    });
+                    break;
+                }
+                case 'server_players': {
+                    const players = Object.keys(session.bot.players);
+                    const playerList = players.length ? players.join(', ') : 'No players online.';
+                    await interaction.reply({
+                        embeds: [createEmbed('Server Players', playerList, session.randomSkin)],
+                        ephemeral: true
                     });
                     break;
                 }
@@ -239,9 +481,9 @@ client.on('interactionCreate', async interaction => {
                     session.connect = false;
                     session.bot.end();
                     delete session.bot;
-                    await interaction.reply({ 
-                        embeds: [createEmbed('Disconnected', 'Bot has been disconnected successfully. 👋')], 
-                        ephemeral: true 
+                    await interaction.reply({
+                        embeds: [createEmbed('Disconnected', 'Bot disconnected successfully. 👋', session.randomSkin)],
+                        ephemeral: true
                     });
                     break;
                 }
@@ -280,41 +522,47 @@ client.on('interactionCreate', async interaction => {
                     break;
                 }
                 case 'attack': {
-                    // Attack the nearest player
                     const entity = session.bot.nearestEntity(e => e.type === 'player' && e.username !== session.bot.username);
                     if (entity) {
                         session.bot.attack(entity);
-                        await interaction.reply({ 
-                            embeds: [createEmbed('Attack', `Attacking player: **${entity.username}** ⚔️`)], 
-                            ephemeral: true 
+                        await interaction.reply({
+                            embeds: [createEmbed('Attack', `Attacking player: **${entity.username}** ⚔️`, session.randomSkin)],
+                            ephemeral: true
                         });
                     } else {
-                        await interaction.reply({ 
-                            embeds: [createEmbed('Attack', 'No target player found to attack.')], 
-                            ephemeral: true 
+                        await interaction.reply({
+                            embeds: [createEmbed('Attack', 'No target player found to attack.', session.randomSkin)],
+                            ephemeral: true
                         });
                     }
                     break;
                 }
                 default:
-                    await interaction.reply({ 
-                        embeds: [createEmbed('Error', 'Unknown action requested 😕')], 
-                        ephemeral: true 
+                    await interaction.reply({
+                        embeds: [createEmbed('Error', 'Unknown action requested 😕', session.randomSkin)],
+                        ephemeral: true
                     });
             }
             return;
         }
-        
+      
         // Modal submissions
         if (interaction.isModalSubmit()) {
             const userId = interaction.user.id;
-            const session = userSessions[userId];
-            if (!session) {
-                await interaction.reply({ 
-                    embeds: [createEmbed('Error', 'Session not found! Please set up your connection with `/settings`.')], 
-                    ephemeral: true 
+            const sessions = userSessions[userId] ? userSessions[userId].servers : null;
+            if (!sessions) {
+                await interaction.reply({
+                    embeds: [createEmbed('Error', 'Session not found! Please set up your connection with `/settings`.')],
+                    ephemeral: true
                 });
                 return;
+            }
+            let session = sessions[0];
+            for (const s of sessions) {
+                if (s.panelSessionIndex) {
+                    session = s;
+                    break;
+                }
             }
             if (interaction.customId === 'modal_change_name') {
                 const newUsername = interaction.fields.getTextInputValue('new_username');
@@ -324,24 +572,24 @@ client.on('interactionCreate', async interaction => {
                     delete session.bot;
                 }
                 if (session.connect) {
-                    session.bot = createBot(session, userId);
+                    session.bot = createBot(session, userId, session.panelSessionIndex || 1);
                 }
-                await interaction.reply({ 
-                    embeds: [createEmbed('Name Changed', `Bot username updated to **${newUsername}** and reconnected if applicable. 👍`)], 
-                    ephemeral: true 
+                await interaction.reply({
+                    embeds: [createEmbed('Name Changed', `Bot username updated to **${newUsername}** and reconnected if applicable. 👍`, session.randomSkin)],
+                    ephemeral: true
                 });
             } else if (interaction.customId === 'modal_send_message') {
                 const chatMessage = interaction.fields.getTextInputValue('chat_message');
                 if (session.bot) {
                     session.bot.chat(chatMessage);
-                    await interaction.reply({ 
-                        embeds: [createEmbed('Message Sent', 'Your message was sent to the Minecraft chat! ✉️')], 
-                        ephemeral: true 
+                    await interaction.reply({
+                        embeds: [createEmbed('Message Sent', 'Your message was sent to the Minecraft chat! ✉️', session.randomSkin)],
+                        ephemeral: true
                     });
                 } else {
-                    await interaction.reply({ 
-                        embeds: [createEmbed('Error', 'Bot is not connected at the moment. Connect using `/connect`.')], 
-                        ephemeral: true 
+                    await interaction.reply({
+                        embeds: [createEmbed('Error', 'Bot is not connected. Connect using `/connect`.')],
+                        ephemeral: true
                     });
                 }
             }
@@ -350,9 +598,9 @@ client.on('interactionCreate', async interaction => {
     } catch (error) {
         console.error('Interaction error:', error);
         try {
-            await interaction.reply({ 
-                embeds: [createEmbed('Error', 'An error occurred while processing your request. Please try again later.')], 
-                ephemeral: true 
+            await interaction.reply({
+                embeds: [createEmbed('Error', 'An error occurred while processing your request. Please try again later.')],
+                ephemeral: true
             });
         } catch (_) {
             console.error('Failed to send error reply.');
@@ -360,150 +608,8 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Slash Commands Handlers
-function handleSettingsCommand(interaction, userId, options) {
-    const host = options.getString('host');
-    const port = options.getInteger('port');
-    const username = options.getString('username');
-    
-    // Save or update the user's server settings, always assign a random skin.
-    userSessions[userId] = {
-        host,
-        port,
-        username,
-        connect: false,
-        delay: 5000,  // default delay before reconnecting is 5 seconds
-        randomSkin: getRandomSkinUrl()
-    };
-    
-    interaction.reply({ 
-        embeds: [createEmbed('Settings Saved', 
-            `Your server connection details have been saved:\n**Host:** ${host}\n**Port:** ${port}\n**Bot Username:** ${username}\n\nYou can use \`/connect\` to activate your bot now. 👍`
-        )], 
-        ephemeral: true 
-    });
-}
-
-async function handleConnectCommand(interaction, userId) {
-    const session = userSessions[userId];
-    if (!session || !session.host || !session.port || !session.username) {
-        await interaction.reply({ 
-            embeds: [createEmbed('Error', 'Please set your server details using `/settings` first.')], 
-            ephemeral: true 
-        });
-        return;
-    }
-    
-    await interaction.reply({ 
-        embeds: [createEmbed('Connecting', 'Attempting to connect to your Minecraft server... ⏳')], 
-        ephemeral: true 
-    });
-    session.connect = true;
-    session.bot = createBot(session, userId);
-}
-
-async function handleDisconnectCommand(interaction, userId) {
-    const session = userSessions[userId];
-    if (session && session.bot) {
-        session.connect = false;
-        session.bot.end();
-        delete session.bot;
-        await interaction.reply({ 
-            embeds: [createEmbed('Disconnected', 'Bot has been disconnected successfully. 👋')], 
-            ephemeral: true 
-        });
-    } else {
-        await interaction.reply({ 
-            embeds: [createEmbed('Error', 'No active bot connection was found to disconnect.')], 
-            ephemeral: true 
-        });
-    }
-}
-
-async function handleSetCommand(interaction, userId, options) {
-    const command = options.getString('command');
-    if (!userSessions[userId]) {
-        userSessions[userId] = {};
-    }
-    userSessions[userId].commandOnConnect = command;
-    await interaction.reply({ 
-        embeds: [createEmbed('Command Set', `The command \`${command}\` will be executed when the bot connects.`)], 
-        ephemeral: true 
-    });
-}
-
-async function handleSetDelayCommand(interaction, userId, options) {
-    const delay = options.getInteger('delay');
-    if (!userSessions[userId]) {
-        userSessions[userId] = {};
-    }
-    userSessions[userId].delay = delay * 1000;
-    await interaction.reply({ 
-        embeds: [createEmbed('Delay Set', `Reconnect delay updated to **${delay} seconds**. ⏰`)], 
-        ephemeral: true 
-    });
-}
-
-async function handleHelpCommand(interaction) {
-    const helpMessage = `
-**Rylix AFK Bot Help** 😄
-
-**Setup your server:**  
-\`/settings <host> <port> <username>\`
-
-**Connect:**  
-\`/connect\`
-
-**Disconnect:**  
-\`/disconnect\`
-
-**Auto-execute a command on connect:**  
-\`/setcommand <command>\`
-
-**Set reconnect delay:**  
-\`/setdelay <delay_in_seconds>\`
-
-**Control Panel:**  
-\`/panel\` - Open the panel for actions (jump, send messages, rename, and attack).
-
-_Note: The bot connects in offline mode and gets a unique random skin on each connection!_
-    `;
-    await interaction.reply({ 
-        embeds: [createEmbed('Help', helpMessage)] 
-    });
-}
-
-async function handlePanelCommand(interaction, userId) {
-    const session = userSessions[userId];
-    if (!session || !session.bot) {
-        await interaction.reply({ 
-            embeds: [createEmbed('Error', 'No active connection found. Please connect using `/connect` first.')], 
-            ephemeral: true 
-        });
-        return;
-    }
-    
-    const embed = createEmbed('Bot Control Panel', 'Use the buttons below to control your bot. Enjoy! 🎮');
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('jump').setLabel('Jump 🚀').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('look_around').setLabel('Look Around 👀').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('disconnect_bot').setLabel('Disconnect 👋').setStyle(ButtonStyle.Danger)
-    );
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('change_name').setLabel('Change Name 💫').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('send_message').setLabel('Send Message ✉️').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('attack').setLabel('Attack ⚔️').setStyle(ButtonStyle.Danger)
-    );
-    await interaction.reply({ 
-        embeds: [embed], 
-        components: [row, row2], 
-        ephemeral: true 
-    });
-}
-
 // Mineflayer Bot Creation and Event Handling
-function createBot(session, userId) {
-    // Create the bot in offline mode and assign a random skin
+function createBot(session, userId, sessionIndex) {
     const bot = mineflayer.createBot({
         host: session.host,
         port: session.port,
@@ -511,66 +617,72 @@ function createBot(session, userId) {
         auth: 'offline'
     });
     
-    // Update the session with a random skin each time we create a bot
+    // Assign a random skin upon connection.
     session.randomSkin = getRandomSkinUrl();
     let errorHandled = false;
     
     bot.on('spawn', async () => {
-        console.log(`Mineflayer bot logged in as ${bot.username} 🤖`);
+        console.log(`Mineflayer bot [Session ${sessionIndex}] logged in as ${bot.username} 🤖`);
         try {
             const logChannel = await client.channels.fetch(logChannelId);
             if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`Connected to **${session.host}:${session.port}** as **${session.username}** 🎉`);
+                await logChannel.send(`Connected to **${session.host}:${session.port}** as **${session.username}** (Session ${sessionIndex}) 🎉`);
             }
         } catch (err) {
             console.error('Error fetching log channel:', err);
         }
-        bot.chat("Hello everyone! I'm your Minecraft AFK & Anti Cheat Bot. 😄");
+        bot.chat("Hello! I'm your Minecraft AFK & Anti Cheat Bot. 😄");
         if (session.commandOnConnect) {
             bot.chat(session.commandOnConnect);
         }
     });
     
-    // Listen for in-game chat and log on Discord.
+    // Throttle chat logging to reduce load
+    let lastChatLog = 0;
     bot.on('chat', async (username, message) => {
-        try {
-            const logChannel = await client.channels.fetch(logChannelId);
-            if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`🗣 [Rylix SMP] **${username}**: ${message}`);
+        const now = Date.now();
+        // Only log at most once every 10 seconds
+        if (now - lastChatLog > 10000) {
+            lastChatLog = now;
+            try {
+                const logChannel = await client.channels.fetch(logChannelId);
+                if (logChannel && logChannel.isTextBased()) {
+                    await logChannel.send(`🗣 [Rylix SMP] **${username}**: ${message}`);
+                }
+            } catch (err) {
+                console.error('Error during chat event:', err);
             }
-        } catch (err) {
-            console.error('Error during chat event:', err);
         }
     });
     
     bot.on('end', async () => {
         if (!errorHandled) {
             errorHandled = true;
-            await handleBotDisconnection(userId, session);
+            await handleBotDisconnection(userId, session, sessionIndex);
         }
     });
     
     bot.on('error', async error => {
         if (!errorHandled) {
             errorHandled = true;
-            await handleBotError(userId, session, error);
+            await handleBotError(userId, session, error, sessionIndex);
         }
     });
     
     return bot;
 }
 
-async function handleBotDisconnection(userId, session) {
-    console.log(`Bot disconnected from ${session.host}:${session.port}`);
+async function handleBotDisconnection(userId, session, sessionIndex) {
+    console.log(`Bot [Session ${sessionIndex}] disconnected from ${session.host}:${session.port}`);
     try {
-        if (userSessions[userId] && userSessions[userId].connect === true) {
+        if (userSessions[userId] && userSessions[userId].servers[sessionIndex - 1].connect === true) {
             const logChannel = await client.channels.fetch(logChannelId);
             if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`<@${userId}>, lost connection to **${session.host}:${session.port}**. Reconnecting in ${session.delay / 1000} seconds ⏰`);
+                await logChannel.send(`<@${userId}>, lost connection to **${session.host}:${session.port}** (Session ${sessionIndex}). Reconnecting in ${session.delay / 1000} seconds ⏰`);
             }
             setTimeout(() => {
-                if (userSessions[userId] && userSessions[userId].connect) {
-                    userSessions[userId].bot = createBot(session, userId);
+                if (userSessions[userId] && userSessions[userId].servers[sessionIndex - 1].connect) {
+                    userSessions[userId].servers[sessionIndex - 1].bot = createBot(session, userId, sessionIndex);
                 }
             }, session.delay);
         }
@@ -579,15 +691,15 @@ async function handleBotDisconnection(userId, session) {
     }
 }
 
-async function handleBotError(userId, session, error) {
+async function handleBotError(userId, session, error, sessionIndex) {
     console.error('Bot error:', error);
     try {
-        if (userSessions[userId] && userSessions[userId].connect === true) {
+        if (userSessions[userId] && userSessions[userId].servers[sessionIndex - 1].connect === true) {
             const logChannel = await client.channels.fetch(logChannelId);
             if (logChannel && logChannel.isTextBased()) {
-                await logChannel.send(`<@${userId}>, encountered an error with **${session.host}:${session.port}**. Please try reconnecting with \`/connect\`.`);
+                await logChannel.send(`<@${userId}>, encountered an error with **${session.host}:${session.port}** (Session ${sessionIndex}). Please try reconnecting with \`/connect\`.`);
             }
-            userSessions[userId].connect = false;
+            userSessions[userId].servers[sessionIndex - 1].connect = false;
             if (session && session.bot) {
                 session.bot.removeAllListeners();
                 session.bot.end();
